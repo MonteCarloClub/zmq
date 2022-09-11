@@ -19,37 +19,92 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
+
 package zmq
 
 import (
 	"fmt"
+	"github.com/stretchr/testify/require"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 )
 
-func TestZmq(t *testing.T) {
-	endpoint := "tcp://127.0.0.1:5555"
+const (
+	endpoint = "tcp://127.0.0.1:5555"
+)
 
-	pushSoc, err := CreatePushSocket(endpoint)
-	assert.NotNil(t, pushSoc)
+// require: index >= 0
+func getMessage(index int) string {
+	if index < 0 {
+		return ""
+	}
+	return fmt.Sprintf("msg_%v", index)
+}
+
+func getIndex(message string) int {
+	msgAndIndex := strings.Split(message, "_")
+	if len(msgAndIndex) < 2 {
+		return -1
+	}
+	index, err := strconv.Atoi(msgAndIndex[1])
+	if err != nil {
+		return -1
+	}
+	return index
+}
+
+func TestPullAndPush(t *testing.T) {
+	pullSocketSet, pushSocketSet := &SocketSet{}, &SocketSet{}
+
+	err := pushSocketSet.SetPushSocket(endpoint)
+	assert.NotNil(t, pushSocketSet.Zmq4PushSocket)
 	assert.Nil(t, err)
 
-	pullSoc, err := CreatePullSocket(endpoint)
-	assert.NotNil(t, pullSoc)
+	err = pullSocketSet.SetPullSocket(endpoint)
+	assert.NotNil(t, pullSocketSet.Zmq4PullSocket)
 	assert.Nil(t, err)
 
 	receivedMessages := make(chan string, 20)
-	go Pull(pullSoc, receivedMessages)
+	pullErrs := make(chan error, 20)
+	go func(pullSocketSet *SocketSet) {
+		for {
+			message, err := pullSocketSet.Pull()
+			if err == nil {
+				receivedMessages <- message
+			} else {
+				pullErrs <- err
+			}
+		}
+	}(pullSocketSet)
 
-	for i := 0; i < 10; i++ {
-		message := fmt.Sprintf("msg_%v", i)
-		err := Push(pushSoc, message)
-		assert.Nil(t, err)
-	}
+	pushErrs := make(chan error, 10)
+	go func(pushSocketSet *SocketSet) {
+		for i := 0; i < 10; i++ {
+			err := pushSocketSet.Push(getMessage(i))
+			if err != nil {
+				pushErrs <- err
+			}
+		}
+	}(pushSocketSet)
 
 	time.Sleep(1 * time.Second)
 
-	assert.Equal(t, 10, len(receivedMessages))
+	require.Equal(t, 10, len(receivedMessages))
+	receivedIndexes := make(map[int]struct{})
+	for i := 0; i < 10; i++ {
+		receivedMessage := <-receivedMessages
+		index := getIndex(receivedMessage)
+		require.LessOrEqual(t, 0, index)
+		require.Greater(t, 10, index)
+		if _, ok := receivedIndexes[index]; !ok {
+			receivedIndexes[index] = struct{}{}
+		}
+	}
+	assert.Equal(t, 10, len(receivedIndexes))
+	assert.Equal(t, 0, len(pullErrs))
+	assert.Equal(t, 0, len(pushErrs))
 }

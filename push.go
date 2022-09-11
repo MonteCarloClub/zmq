@@ -19,39 +19,52 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
+
 package zmq
 
 import (
 	"fmt"
 
-	"github.com/KofClubs/log"
-	zmq "github.com/pebbe/zmq4"
+	"github.com/MonteCarloClub/log"
+	"github.com/MonteCarloClub/utils"
+	"github.com/pebbe/zmq4"
 )
 
-func CreatePushSocket(endpoint string) (*zmq.Socket, error) {
-	ctx, err := zmq.NewContext()
-	if err != nil {
-		log.Error("fail to create zmq push context", "err", err)
-		return nil, err
+func (socketSet *SocketSet) SetPushSocket(endpoint string) error {
+	if socketSet == nil {
+		log.Error("invalid socket set", utils.NilPtrDeref, utils.NilPtrDerefErr)
+		return utils.NilPtrDerefErr
 	}
 
-	soc, err := ctx.NewSocket(zmq.PUSH)
+	ctx, err := zmq4.NewContext()
+	if err != nil {
+		log.Error("fail to create zmq push context", "err", err)
+		return err
+	}
+
+	soc, err := ctx.NewSocket(zmq4.PUSH)
 	if err != nil {
 		log.Error("fail to create zmq push socket", "err", err)
-		return nil, err
+		return err
 	}
 
 	err = soc.Bind(endpoint)
 	if err != nil {
 		log.Error("fail to accept incoming connections on zmq push socket", "endpoint", endpoint, "err", err)
-		return nil, err
+		return err
 	}
 
-	return soc, nil
+	socketSet.Zmq4PushSocket = soc
+	return nil
 }
 
-func Push(pushSoc *zmq.Socket, message string) error {
-	size, err := pushSoc.Send(message, 0)
+func (socketSet *SocketSet) Push(message string) error {
+	if socketSet == nil || socketSet.Zmq4PushSocket == nil {
+		log.Error("invalid push socket", utils.NilPtrDeref, utils.NilPtrDerefErr)
+		return utils.NilPtrDerefErr
+	}
+
+	size, err := socketSet.Zmq4PushSocket.Send(message, 0)
 	if err != nil {
 		log.Error("fail to send message on zmq push socket", "message", message, "size", size, "err", err)
 		return err

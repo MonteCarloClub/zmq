@@ -19,42 +19,53 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
+
 package zmq
 
 import (
-	"github.com/KofClubs/log"
-	zmq "github.com/pebbe/zmq4"
+	"github.com/MonteCarloClub/log"
+	"github.com/MonteCarloClub/utils"
+	"github.com/pebbe/zmq4"
 )
 
-func CreatePullSocket(endpoint string) (*zmq.Socket, error) {
-	ctx, err := zmq.NewContext()
-	if err != nil {
-		log.Error("fail to create zmq pull context", "err", err)
-		return nil, err
+func (socketSet *SocketSet) SetPullSocket(endpoint string) error {
+	if socketSet == nil {
+		log.Error("invalid socket set", utils.NilPtrDeref, utils.NilPtrDerefErr)
+		return utils.NilPtrDerefErr
 	}
 
-	soc, err := ctx.NewSocket(zmq.PULL)
+	ctx, err := zmq4.NewContext()
+	if err != nil {
+		log.Error("fail to create zmq pull context", "err", err)
+		return err
+	}
+
+	soc, err := ctx.NewSocket(zmq4.PULL)
 	if err != nil {
 		log.Error("fail to create zmq pull socket", "err", err)
-		return nil, err
+		return err
 	}
 
 	err = soc.Connect(endpoint)
 	if err != nil {
 		log.Error("fail to create outgoing connection from zmq pull socket", "endpoint", endpoint, "err", err)
-		return nil, err
+		return err
 	}
 
-	return soc, nil
+	socketSet.Zmq4PullSocket = soc
+	return nil
 }
 
-func Pull(pullSoc *zmq.Socket, messages chan string) {
-	for {
-		message, err := pullSoc.Recv(0)
-		if err != nil {
-			log.Warn("fail to receive message from zmq subscribe socket", "err", err)
-			continue
-		}
-		messages <- message
+func (socketSet *SocketSet) Pull() (string, error) {
+	if socketSet == nil || socketSet.Zmq4PullSocket == nil {
+		log.Error("invalid pull socket", utils.NilPtrDeref, utils.NilPtrDerefErr)
+		return "", utils.NilPtrDerefErr
 	}
+
+	message, err := socketSet.Zmq4PullSocket.Recv(0)
+	if err != nil {
+		log.Error("fail to receive message from zmq subscribe socket", "err", err)
+		return "", err
+	}
+	return message, nil
 }
