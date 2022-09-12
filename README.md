@@ -5,7 +5,8 @@ ZeroMQ out of the box
 ```bash
 git clone https://github.com/MonteCarloClub/zmq.git && cd zmq
 apt install pkg-config libzmq3-dev
-go test -run TestZmq github.com/MonteCarloClub/zmq
+go test -run TestPubAndSub github.com/MonteCarloClub/zmq
+go test -run TestPullAndPush github.com/MonteCarloClub/zmq
 ```
 
 ## Import This Go Module

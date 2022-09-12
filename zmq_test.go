@@ -70,7 +70,7 @@ func TestPubAndSub(t *testing.T) {
 		subSocketSet := CreateSocketSet()
 		// "tcp://127.0.0.1:5555", "tcp://127.0.0.2:5555",..., "tcp://127.0.0.10:5555"
 		err = subSocketSet.SetSubSocket(strings.ReplaceAll(subEndpointExpression, "*", strconv.Itoa(i+1)),
-			"msg_")
+			messagePrefix)
 		assert.NotNil(t, subSocketSet.Zmq4SubSocket)
 		assert.Nil(t, err)
 		subSocketSets = append(subSocketSets, subSocketSet)
@@ -79,16 +79,20 @@ func TestPubAndSub(t *testing.T) {
 	receivedMessages := make(chan string, messageCount*2)
 	subErrs := make(chan error, messageCount*2)
 	for _, subSocketSet := range subSocketSets {
-		go func(subSocketSet *SocketSet) {
-			for {
-				message, err := subSocketSet.Sub()
-				if err == nil {
-					receivedMessages <- message
-				} else {
-					subErrs <- err
-				}
-			}
-		}(subSocketSet)
+		// test Sub
+		//go func(subSocketSet *SocketSet) {
+		//	for {
+		//		message, err := subSocketSet.Sub()
+		//		if err == nil {
+		//			receivedMessages <- message
+		//		} else {
+		//			subErrs <- err
+		//		}
+		//	}
+		//}(subSocketSet)
+		// test SubToChan
+		err = subSocketSet.SubToChan(receivedMessages, subErrs)
+		assert.Nil(t, err)
 	}
 
 	pubErrs := make(chan error, messageCount*2)
@@ -132,16 +136,20 @@ func TestPullAndPush(t *testing.T) {
 
 	receivedMessages := make(chan string, messageCount*2)
 	pullErrs := make(chan error, messageCount*2)
-	go func(pullSocketSet *SocketSet) {
-		for {
-			message, err := pullSocketSet.Pull()
-			if err == nil {
-				receivedMessages <- message
-			} else {
-				pullErrs <- err
-			}
-		}
-	}(pullSocketSet)
+	// test Pull
+	//go func(pullSocketSet *SocketSet) {
+	//	for {
+	//		message, err := pullSocketSet.Pull()
+	//		if err == nil {
+	//			receivedMessages <- message
+	//		} else {
+	//			pullErrs <- err
+	//		}
+	//	}
+	//}(pullSocketSet)
+	// test PullToChan
+	err = pullSocketSet.PullToChan(receivedMessages, pullErrs)
+	assert.Nil(t, err)
 
 	pushErrs := make(chan error, messageCount*2)
 	go func(pushSocketSet *SocketSet) {

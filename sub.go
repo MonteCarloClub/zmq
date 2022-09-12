@@ -75,3 +75,23 @@ func (socketSet *SocketSet) Sub() (string, error) {
 	}
 	return message, nil
 }
+
+func (socketSet *SocketSet) SubToChan(messages chan string, errs chan error) error {
+	if socketSet == nil || socketSet.Zmq4SubSocket == nil {
+		log.Error("invalid sub socket", utils.NilPtrDeref, utils.NilPtrDerefErr)
+		return utils.NilPtrDerefErr
+	}
+
+	go func(messages chan string) {
+		for {
+			message, err := socketSet.Zmq4SubSocket.Recv(0)
+			if err != nil {
+				log.Warn("fail to receive message from zmq sub socket", "err", err)
+				errs <- err
+				continue
+			}
+			messages <- message
+		}
+	}(messages)
+	return nil
+}

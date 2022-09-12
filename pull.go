@@ -69,3 +69,23 @@ func (socketSet *SocketSet) Pull() (string, error) {
 	}
 	return message, nil
 }
+
+func (socketSet *SocketSet) PullToChan(messages chan string, errs chan error) error {
+	if socketSet == nil || socketSet.Zmq4PullSocket == nil {
+		log.Error("invalid pull socket", utils.NilPtrDeref, utils.NilPtrDerefErr)
+		return utils.NilPtrDerefErr
+	}
+
+	go func(messages chan string) {
+		for {
+			message, err := socketSet.Zmq4PullSocket.Recv(0)
+			if err != nil {
+				log.Warn("fail to receive message from zmq pull socket", "err", err)
+				errs <- err
+				continue
+			}
+			messages <- message
+		}
+	}(messages)
+	return nil
+}
