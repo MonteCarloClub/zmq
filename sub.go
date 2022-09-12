@@ -28,7 +28,7 @@ import (
 	"github.com/pebbe/zmq4"
 )
 
-func (socketSet *SocketSet) SetPullSocket(endpoint string) error {
+func (socketSet *SocketSet) SetSubSocket(endpoint string, filter string) error {
 	if socketSet == nil {
 		log.Error("invalid socket set", utils.NilPtrDeref, utils.NilPtrDerefErr)
 		return utils.NilPtrDerefErr
@@ -36,35 +36,41 @@ func (socketSet *SocketSet) SetPullSocket(endpoint string) error {
 
 	ctx, err := zmq4.NewContext()
 	if err != nil {
-		log.Error("fail to create zmq pull context", "err", err)
+		log.Error("fail to create zmq sub context", "err", err)
 		return err
 	}
 
-	soc, err := ctx.NewSocket(zmq4.PULL)
+	soc, err := ctx.NewSocket(zmq4.SUB)
 	if err != nil {
-		log.Error("fail to create zmq pull socket", "err", err)
+		log.Error("fail to create zmq sub socket", "err", err)
 		return err
 	}
 
 	err = soc.Connect(endpoint)
 	if err != nil {
-		log.Error("fail to create outgoing connection from zmq pull socket", "endpoint", endpoint, "err", err)
+		log.Error("fail to create outgoing connection from zmq sub socket", "endpoint", endpoint, "err", err)
 		return err
 	}
 
-	socketSet.Zmq4PullSocket = soc
+	err = soc.SetSubscribe(filter)
+	if err != nil {
+		log.Error("fail to establish message filter", "filter", filter, "err", err)
+		return err
+	}
+
+	socketSet.Zmq4SubSocket = soc
 	return nil
 }
 
-func (socketSet *SocketSet) Pull() (string, error) {
-	if socketSet == nil || socketSet.Zmq4PullSocket == nil {
-		log.Error("invalid pull socket", utils.NilPtrDeref, utils.NilPtrDerefErr)
+func (socketSet *SocketSet) Sub() (string, error) {
+	if socketSet == nil || socketSet.Zmq4SubSocket == nil {
+		log.Error("invalid sub socket", utils.NilPtrDeref, utils.NilPtrDerefErr)
 		return "", utils.NilPtrDerefErr
 	}
 
-	message, err := socketSet.Zmq4PullSocket.Recv(0)
+	message, err := socketSet.Zmq4SubSocket.Recv(0)
 	if err != nil {
-		log.Error("fail to receive message from zmq pull socket", "err", err)
+		log.Error("fail to receive message from zmq sub socket", "err", err)
 		return "", err
 	}
 	return message, nil

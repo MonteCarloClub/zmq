@@ -23,18 +23,21 @@ THE SOFTWARE.
 package zmq
 
 import (
-	"fmt"
-	"github.com/stretchr/testify/require"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 const (
-	endpoint = "tcp://127.0.0.1:5555"
+	messagePrefix         = "msg_"
+	messageCount          = 10
+	pubEndpoint           = "tcp://*:5555"
+	subEndpointExpression = "tcp://127.0.0.*:5555"
+	pullAndPushEndpoint   = "tcp://127.0.0.1:5555"
 )
 
 // require: index >= 0
@@ -42,34 +45,93 @@ func getMessage(index int) string {
 	if index < 0 {
 		return ""
 	}
-	return fmt.Sprintf("msg_%v", index)
+	return messagePrefix + strconv.Itoa(index)
 }
 
 func getIndex(message string) int {
-	msgAndIndex := strings.Split(message, "_")
-	if len(msgAndIndex) < 2 {
+	if len(message) <= len(messagePrefix) {
 		return -1
 	}
-	index, err := strconv.Atoi(msgAndIndex[1])
-	if err != nil {
+	index, err := strconv.Atoi(message[len(messagePrefix):])
+	if err != nil || index < 0 {
 		return -1
 	}
 	return index
 }
 
-func TestPullAndPush(t *testing.T) {
-	pullSocketSet, pushSocketSet := &SocketSet{}, &SocketSet{}
+func TestPubAndSub(t *testing.T) {
+	pubSocketSet := CreateSocketSet()
+	err := pubSocketSet.SetPubSocket(pubEndpoint)
+	assert.NotNil(t, pubSocketSet.Zmq4PubSocket)
+	assert.Nil(t, err)
 
-	err := pushSocketSet.SetPushSocket(endpoint)
+	subSocketSets := make([]*SocketSet, 0)
+	for i := 0; i < messageCount; i++ {
+		subSocketSet := CreateSocketSet()
+		// "tcp://127.0.0.1:5555", "tcp://127.0.0.2:5555",..., "tcp://127.0.0.10:5555"
+		err = subSocketSet.SetSubSocket(strings.ReplaceAll(subEndpointExpression, "*", strconv.Itoa(i+1)),
+			"msg_")
+		assert.NotNil(t, subSocketSet.Zmq4SubSocket)
+		assert.Nil(t, err)
+		subSocketSets = append(subSocketSets, subSocketSet)
+	}
+
+	receivedMessages := make(chan string, messageCount*2)
+	subErrs := make(chan error, messageCount*2)
+	for _, subSocketSet := range subSocketSets {
+		go func(subSocketSet *SocketSet) {
+			for {
+				message, err := subSocketSet.Sub()
+				if err == nil {
+					receivedMessages <- message
+				} else {
+					subErrs <- err
+				}
+			}
+		}(subSocketSet)
+	}
+
+	pubErrs := make(chan error, messageCount*2)
+	go func(pubSocketSet *SocketSet) {
+		for i := 0; i < messageCount; i++ {
+			err := pubSocketSet.Pub(getMessage(i))
+			if err != nil {
+				pubErrs <- err
+			}
+		}
+	}(pubSocketSet)
+
+	time.Sleep(1 * time.Second)
+
+	require.Equal(t, messageCount, len(receivedMessages))
+	receivedIndexes := make(map[int]struct{})
+	for i := 0; i < messageCount; i++ {
+		receivedMessage := <-receivedMessages
+		index := getIndex(receivedMessage)
+		require.LessOrEqual(t, 0, index)
+		require.Greater(t, messageCount, index)
+		if _, ok := receivedIndexes[index]; !ok {
+			receivedIndexes[index] = struct{}{}
+		}
+	}
+	assert.Equal(t, messageCount, len(receivedIndexes))
+	assert.Equal(t, 0, len(pubErrs))
+	assert.Equal(t, 0, len(subErrs))
+}
+
+func TestPullAndPush(t *testing.T) {
+	pullSocketSet, pushSocketSet := CreateSocketSet(), CreateSocketSet()
+
+	err := pushSocketSet.SetPushSocket(pullAndPushEndpoint)
 	assert.NotNil(t, pushSocketSet.Zmq4PushSocket)
 	assert.Nil(t, err)
 
-	err = pullSocketSet.SetPullSocket(endpoint)
+	err = pullSocketSet.SetPullSocket(pullAndPushEndpoint)
 	assert.NotNil(t, pullSocketSet.Zmq4PullSocket)
 	assert.Nil(t, err)
 
-	receivedMessages := make(chan string, 20)
-	pullErrs := make(chan error, 20)
+	receivedMessages := make(chan string, messageCount*2)
+	pullErrs := make(chan error, messageCount*2)
 	go func(pullSocketSet *SocketSet) {
 		for {
 			message, err := pullSocketSet.Pull()
@@ -81,9 +143,9 @@ func TestPullAndPush(t *testing.T) {
 		}
 	}(pullSocketSet)
 
-	pushErrs := make(chan error, 10)
+	pushErrs := make(chan error, messageCount*2)
 	go func(pushSocketSet *SocketSet) {
-		for i := 0; i < 10; i++ {
+		for i := 0; i < messageCount; i++ {
 			err := pushSocketSet.Push(getMessage(i))
 			if err != nil {
 				pushErrs <- err
@@ -93,18 +155,18 @@ func TestPullAndPush(t *testing.T) {
 
 	time.Sleep(1 * time.Second)
 
-	require.Equal(t, 10, len(receivedMessages))
+	require.Equal(t, messageCount, len(receivedMessages))
 	receivedIndexes := make(map[int]struct{})
-	for i := 0; i < 10; i++ {
+	for i := 0; i < messageCount; i++ {
 		receivedMessage := <-receivedMessages
 		index := getIndex(receivedMessage)
 		require.LessOrEqual(t, 0, index)
-		require.Greater(t, 10, index)
+		require.Greater(t, messageCount, index)
 		if _, ok := receivedIndexes[index]; !ok {
 			receivedIndexes[index] = struct{}{}
 		}
 	}
-	assert.Equal(t, 10, len(receivedIndexes))
+	assert.Equal(t, messageCount, len(receivedIndexes))
 	assert.Equal(t, 0, len(pullErrs))
 	assert.Equal(t, 0, len(pushErrs))
 }

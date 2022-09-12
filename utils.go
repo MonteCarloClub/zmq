@@ -27,5 +27,10 @@ import (
 )
 
 type SocketSet struct {
+	Zmq4PubSocket, Zmq4SubSocket   *zmq4.Socket
 	Zmq4PullSocket, Zmq4PushSocket *zmq4.Socket
+}
+
+func CreateSocketSet() *SocketSet {
+	return &SocketSet{}
 }

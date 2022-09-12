@@ -23,12 +23,14 @@ THE SOFTWARE.
 package zmq
 
 import (
+	"fmt"
+
 	"github.com/MonteCarloClub/log"
 	"github.com/MonteCarloClub/utils"
 	"github.com/pebbe/zmq4"
 )
 
-func (socketSet *SocketSet) SetPullSocket(endpoint string) error {
+func (socketSet *SocketSet) SetPubSocket(endpoint string) error {
 	if socketSet == nil {
 		log.Error("invalid socket set", utils.NilPtrDeref, utils.NilPtrDerefErr)
 		return utils.NilPtrDerefErr
@@ -36,36 +38,41 @@ func (socketSet *SocketSet) SetPullSocket(endpoint string) error {
 
 	ctx, err := zmq4.NewContext()
 	if err != nil {
-		log.Error("fail to create zmq pull context", "err", err)
+		log.Error("fail to create zmq pub context", "err", err)
 		return err
 	}
 
-	soc, err := ctx.NewSocket(zmq4.PULL)
+	soc, err := ctx.NewSocket(zmq4.PUB)
 	if err != nil {
-		log.Error("fail to create zmq pull socket", "err", err)
+		log.Error("fail to create zmq pub socket", "err", err)
 		return err
 	}
 
-	err = soc.Connect(endpoint)
+	err = soc.Bind(endpoint)
 	if err != nil {
-		log.Error("fail to create outgoing connection from zmq pull socket", "endpoint", endpoint, "err", err)
+		log.Error("fail to accept incoming connections from zmq pub socket", "endpoint", endpoint, "err", err)
 		return err
 	}
 
-	socketSet.Zmq4PullSocket = soc
+	socketSet.Zmq4PubSocket = soc
 	return nil
 }
 
-func (socketSet *SocketSet) Pull() (string, error) {
-	if socketSet == nil || socketSet.Zmq4PullSocket == nil {
-		log.Error("invalid pull socket", utils.NilPtrDeref, utils.NilPtrDerefErr)
-		return "", utils.NilPtrDerefErr
+func (socketSet *SocketSet) Pub(message string) error {
+	if socketSet == nil || socketSet.Zmq4PubSocket == nil {
+		log.Error("invalid pub socket", utils.NilPtrDeref, utils.NilPtrDerefErr)
+		return utils.NilPtrDerefErr
 	}
 
-	message, err := socketSet.Zmq4PullSocket.Recv(0)
+	size, err := socketSet.Zmq4PubSocket.Send(message, 0)
 	if err != nil {
-		log.Error("fail to receive message from zmq pull socket", "err", err)
-		return "", err
+		log.Error("fail to send message on zmq pub socket", "message", message, "size", size, "err", err)
+		return err
 	}
-	return message, nil
+	if size <= 0 {
+		err = fmt.Errorf("send size non-positive: %v", size)
+		log.Error("fail to send message on zmq pub socket", "message", message, "size", size, "err", err)
+		return err
+	}
+	return nil
 }
