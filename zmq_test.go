@@ -61,6 +61,8 @@ func getIndex(message string) int {
 
 func TestPubAndSub(t *testing.T) {
 	pubSocketSet := CreateSocketSet()
+	defer pubSocketSet.Close()
+
 	err := pubSocketSet.SetPubSocket(pubEndpoint)
 	assert.NotNil(t, pubSocketSet.Zmq4PubSocket)
 	assert.Nil(t, err)
@@ -75,6 +77,11 @@ func TestPubAndSub(t *testing.T) {
 		assert.Nil(t, err)
 		subSocketSets = append(subSocketSets, subSocketSet)
 	}
+	defer func(subSocketSets []*SocketSet) {
+		for _, subSocketSet := range subSocketSets {
+			subSocketSet.Close()
+		}
+	}(subSocketSets)
 
 	receivedMessages := make(chan string, messageCount*2)
 	subErrs := make(chan error, messageCount*2)
@@ -125,6 +132,8 @@ func TestPubAndSub(t *testing.T) {
 
 func TestPullAndPush(t *testing.T) {
 	pullSocketSet, pushSocketSet := CreateSocketSet(), CreateSocketSet()
+	defer pullSocketSet.Close()
+	defer pushSocketSet.Close()
 
 	err := pushSocketSet.SetPushSocket(pullAndPushEndpoint)
 	assert.NotNil(t, pushSocketSet.Zmq4PushSocket)

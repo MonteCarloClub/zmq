@@ -34,3 +34,29 @@ type SocketSet struct {
 func CreateSocketSet() *SocketSet {
 	return &SocketSet{}
 }
+
+func (socketSet *SocketSet) Close() {
+	if socketSet == nil {
+		return
+	}
+
+	if socketSet.Zmq4PubSocket != nil {
+		_ = socketSet.Zmq4PubSocket.SetLinger(0)
+		_ = socketSet.Zmq4PubSocket.Close()
+	}
+
+	if socketSet.Zmq4SubSocket != nil {
+		_ = socketSet.Zmq4SubSocket.SetLinger(0)
+		_ = socketSet.Zmq4SubSocket.Close()
+	}
+
+	if socketSet.Zmq4PullSocket != nil {
+		_ = socketSet.Zmq4PullSocket.SetLinger(0)
+		_ = socketSet.Zmq4PullSocket.Close()
+	}
+
+	if socketSet.Zmq4PushSocket != nil {
+		_ = socketSet.Zmq4PushSocket.SetLinger(0)
+		_ = socketSet.Zmq4PushSocket.Close()
+	}
+}

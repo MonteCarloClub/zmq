@@ -82,7 +82,7 @@ func (socketSet *SocketSet) SubToChan(messages chan string, errs chan error) err
 		return utils.NilPtrDerefErr
 	}
 
-	go func(messages chan string) {
+	go func(messages chan string, errs chan error) {
 		for {
 			message, err := socketSet.Zmq4SubSocket.Recv(0)
 			if err != nil {
@@ -92,6 +92,6 @@ func (socketSet *SocketSet) SubToChan(messages chan string, errs chan error) err
 			}
 			messages <- message
 		}
-	}(messages)
+	}(messages, errs)
 	return nil
 }

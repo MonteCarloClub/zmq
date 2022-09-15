@@ -76,7 +76,7 @@ func (socketSet *SocketSet) PullToChan(messages chan string, errs chan error) er
 		return utils.NilPtrDerefErr
 	}
 
-	go func(messages chan string) {
+	go func(messages chan string, errs chan error) {
 		for {
 			message, err := socketSet.Zmq4PullSocket.Recv(0)
 			if err != nil {
@@ -86,6 +86,6 @@ func (socketSet *SocketSet) PullToChan(messages chan string, errs chan error) er
 			}
 			messages <- message
 		}
-	}(messages)
+	}(messages, errs)
 	return nil
 }
